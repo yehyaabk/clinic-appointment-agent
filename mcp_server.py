@@ -5,6 +5,7 @@ from helpers.formatter import format_doctors
 from datetime import datetime
 from helpers.booking_checks import *
 from helpers.clients import *
+from calendar.calendar_tools import *
 
 import warnings
 
@@ -53,6 +54,19 @@ def search_doctors_by_symptoms(symptom_description: str) -> str:
     return format_doctors(matched_doctors)
 
 
+from datetime import datetime, timedelta
+from helpers.validators import (
+    find_matching_doctors,
+    format_doctor_options,
+    is_valid_appointment_date,
+    is_valid_appointment_time,
+    has_conflicting_appointment,
+)
+from db.clients import get_client_by_identifier
+from db.config import get_connection
+from calendar_tools import get_service, create_appointment_event
+
+
 @mcp.tool(name="book_appointment")
 def book_appointment(identifier: str, doctor_identifier: str, date: str = None, time: str = None) -> str:
     """
@@ -63,7 +77,6 @@ def book_appointment(identifier: str, doctor_identifier: str, date: str = None, 
     date: appointment date, format 'YYYY-MM-DD'
     time: appointment start time, format 'HH:MM'
     """
-
     client = get_client_by_identifier(identifier)
 
     if client is None or not client.get("email"):
@@ -71,7 +84,7 @@ def book_appointment(identifier: str, doctor_identifier: str, date: str = None, 
             "Please enter your email before booking an appointment — "
             "it's not possible to book without it first."
         )
-    
+
     if date is None or time is None:
         return (
             "Please provide both a date and a time for your appointment. "
@@ -111,6 +124,37 @@ def book_appointment(identifier: str, doctor_identifier: str, date: str = None, 
             "Please choose a different time."
         )
 
-    
+    # ... continue with: find/create client,
+    #     create Calendar event, insert appointment into MySQL
+    client_email = client["email"]
+    service = get_service()
 
+    summary = f"Appointment: {client.get('full_name') or client_email} with Dr. {doctor['full_name']}"
 
+    google_event_id = create_appointment_event(
+        service=service,
+        summary=summary,
+        date=date,
+        time=time,
+        attendee_email=client_email,
+    )
+
+    start_dt = datetime.strptime(f"{date} {time}", "%Y-%m-%d %H:%M")
+    end_dt = start_dt + timedelta(minutes=30)
+
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """INSERT INTO appointments (client_id, doctor_id, start_time, end_time, status, google_event_id)
+            VALUES (%s, %s, %s, %s, 'confirmed', %s)""",
+        (client["id"], doctor["id"], start_dt, end_dt, google_event_id)
+    )
+    connection.commit()
+    cursor.close()
+    connection.close()
+
+    return (
+        f"Your appointment is confirmed for {date} at {time} "
+        f"with Dr. {doctor['full_name']} ({doctor['specialization']}). "
+        f"A calendar invite has been sent to {client_email}."
+    )
