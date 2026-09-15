@@ -1,5 +1,6 @@
+-- ============================================
 -- Medical Center Appointment Bot — DB Schema
-
+-- ============================================
 
 CREATE TABLE IF NOT EXISTS doctors (
     id INT PRIMARY KEY AUTO_INCREMENT,
@@ -14,6 +15,7 @@ CREATE TABLE IF NOT EXISTS clients (
     id INT PRIMARY KEY AUTO_INCREMENT,
     telegram_id VARCHAR(50) UNIQUE,
     whatsapp_number VARCHAR(20) UNIQUE,
+    channel ENUM('telegram', 'whatsapp') NOT NULL,
     full_name VARCHAR(100),
     email VARCHAR(150),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
