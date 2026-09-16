@@ -51,24 +51,3 @@ def get_or_create_client(identifier: str, channel: str) -> int:
     cursor.close()
     connection.close()
     return new_id
-
-
-def update_client_email(identifier: str, email: str) -> bool:
-    """
-    Saves the client's email address. Returns True if a matching client
-    was found and updated, False otherwise.
-    """
-    connection = get_connection()
-    cursor = connection.cursor()
-
-    cursor.execute(
-        "UPDATE clients SET email = %s WHERE telegram_id = %s OR whatsapp_number = %s",
-        (email, identifier, identifier)
-    )
-    connection.commit()
-
-    updated = cursor.rowcount > 0
-
-    cursor.close()
-    connection.close()
-    return updated
