@@ -82,6 +82,15 @@ def delete_calendar_event(service: Resource, event_id: str, calendar_id: str = "
     """Deletes a Google Calendar event by its id."""
     service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
 
+def update_event_attendee_email(service, event_id: str, new_email: str, calendar_id: str = "primary") -> None:
+    """Changes the attendee's email on an existing Google Calendar event."""
+    service.events().patch(
+        calendarId=calendar_id,
+        eventId=event_id,
+        body={"attendees": [{"email": new_email}]},
+        sendUpdates="all",  # notifies the new email with an updated invite
+    ).execute()
+
 
 if __name__ == "__main__":
     service = get_service()

@@ -169,7 +169,8 @@ def add_client_email(identifier: str, client_email: str) -> str:
     set_client_email(identifier, client_email)
 
     if old_email:
-        return f"Your email has been updated from {old_email} to {client_email}."
+        update_attendee_email_in_appointments(client_id=client["id"], new_email=client_email)
+        return f"Your email has been updated from {old_email} to {client_email}. Please check your new email to confirm your appointments."
 
     return "Your email has been saved successfully."
 
