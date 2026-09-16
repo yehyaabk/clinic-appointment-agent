@@ -78,6 +78,11 @@ def create_appointment_event(
     return created_event["id"]
 
 
+def delete_calendar_event(service: Resource, event_id: str, calendar_id: str = "primary") -> None:
+    """Deletes a Google Calendar event by its id."""
+    service.events().delete(calendarId=calendar_id, eventId=event_id).execute()
+
+
 if __name__ == "__main__":
     service = get_service()
     print("Calendar service created successfully:", service)

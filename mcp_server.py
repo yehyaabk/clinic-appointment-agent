@@ -174,18 +174,6 @@ def add_client_email(identifier: str, client_email: str) -> str:
     return "Your email has been saved successfully."
 
 
-from datetime import datetime, timedelta
-from helpers.validators import (
-    find_matching_doctors,
-    format_doctor_options,
-    is_valid_appointment_date,
-    is_valid_appointment_time,
-    has_conflicting_appointment,
-)
-from db.clients import get_client_by_identifier
-from db.config import get_connection
-from calendar_tools import get_service, create_appointment_event, delete_calendar_event
-
 
 @mcp.tool(name="reschedule_appointment")
 def reschedule_appointment(identifier: str, doctor_identifier: str, date: str = None, time: str = None) -> str:
