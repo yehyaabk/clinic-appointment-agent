@@ -1,6 +1,7 @@
 from mcp.server.fastmcp import FastMCP
-from  db.config import get_connection
+from db.config import get_connection
 from helpers.groq_functions import match_doctors_to_symptoms
+from helpers.emails import *
 from helpers.formatter import format_doctors
 from datetime import datetime
 from helpers.booking_checks import *
@@ -53,18 +54,6 @@ def search_doctors_by_symptoms(symptom_description: str) -> str:
 
     return format_doctors(matched_doctors)
 
-
-from datetime import datetime, timedelta
-from helpers.validators import (
-    find_matching_doctors,
-    format_doctor_options,
-    is_valid_appointment_date,
-    is_valid_appointment_time,
-    has_conflicting_appointment,
-)
-from db.clients import get_client_by_identifier
-from db.config import get_connection
-from calendar_tools import get_service, create_appointment_event
 
 
 @mcp.tool(name="book_appointment")
@@ -123,9 +112,7 @@ def book_appointment(identifier: str, doctor_identifier: str, date: str = None, 
             f"Dr. {doctor['full_name']} already has an appointment at {time} on {date}. "
             "Please choose a different time."
         )
-
-    # ... continue with: find/create client,
-    #     create Calendar event, insert appointment into MySQL
+    # create Calendar event, insert appointment into MySQL
     client_email = client["email"]
     service = get_service()
 
@@ -158,3 +145,33 @@ def book_appointment(identifier: str, doctor_identifier: str, date: str = None, 
         f"with Dr. {doctor['full_name']} ({doctor['specialization']}). "
         f"A calendar invite has been sent to {client_email}."
     )
+
+@mcp.tool(name="add_client_email")
+def add_client_email(identifier: str, client_email: str) -> str:
+    """
+    Sets or updates a client's email address.
+
+    identifier: the client's telegram_id or whatsapp_number
+    client_email: the new email address to save
+    """
+    if not is_valid_email(client_email):
+        return "That doesn't look like a valid email address. Please enter it again, e.g. name@example.com."
+
+    client = get_client_by_identifier(identifier)
+
+    if client is None:
+        return "We couldn't find your client record yet. Please send a message first so we can register you."
+
+    old_email = client.get("email")
+
+    set_client_email(identifier, client_email)
+
+    if old_email:
+        return f"Your email has been updated from {old_email} to {client_email}."
+
+    return "Your email has been saved successfully."
+    
+
+    
+
+
