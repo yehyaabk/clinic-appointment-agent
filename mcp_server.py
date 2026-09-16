@@ -6,7 +6,7 @@ from helpers.formatter import format_doctors
 from datetime import datetime, timedelta
 from helpers.booking_checks import *
 from helpers.clients import *
-from calendar.calendar_tools import *
+from calendar_service.calendar_tools import *
 
 import warnings
 
@@ -327,16 +327,16 @@ def cancel_appointment(identifier: str, doctor_identifier: str) -> str:
  
     service = get_service()
     delete_calendar_event(service, existing_appointment["google_event_id"])
- 
+
     cursor.execute(
         "UPDATE appointments SET status = 'cancelled' WHERE id = %s",
         (existing_appointment["id"],)
     )
     connection.commit()
- 
+
     cursor.close()
     connection.close()
- 
+
     return f"Your appointment with Dr. {doctor['full_name']} has been cancelled."
 
 
@@ -377,7 +377,7 @@ def list_appointments(identifier: str) -> str:
     ]
 
     return "Your upcoming appointments:\n" + "\n".join(lines)
- 
+
 
     
 

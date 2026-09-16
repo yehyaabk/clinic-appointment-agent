@@ -1,6 +1,6 @@
 import re
 from db.config import get_connection
-from calendar.calendar_tools import update_event_attendee_email, get_service
+from calendar_service.calendar_tools import update_event_attendee_email, get_service
 
 
 EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
