@@ -3,7 +3,7 @@ from db.config import get_connection
 from helpers.groq_functions import match_doctors_to_symptoms
 from helpers.emails import *
 from helpers.formatter import format_doctors
-from datetime import datetime
+from datetime import datetime, timedelta
 from helpers.booking_checks import *
 from helpers.clients import *
 from calendar.calendar_tools import *
@@ -284,8 +284,100 @@ def reschedule_appointment(identifier: str, doctor_identifier: str, date: str = 
 
 
 @mcp.tool(name="cancel_appointment")
-def cancel_appointment():
-    pass
+def cancel_appointment(identifier: str, doctor_identifier: str) -> str:
+    """
+    Cancels a client's existing confirmed appointment with a specific doctor.
+ 
+    identifier: the client's telegram_id or whatsapp_number
+    doctor_identifier: the doctor's full name, or their numeric id if the name is ambiguous
+    """
+    client = get_client_by_identifier(identifier)
+ 
+    if client is None:
+        return "We couldn't find your client record yet. Please send a message first so we can register you."
+ 
+    matching_doctors = find_matching_doctors(doctor_identifier)
+ 
+    if len(matching_doctors) == 0:
+        return f"We couldn't find a doctor matching '{doctor_identifier}'. Please check the name and try again."
+ 
+    if len(matching_doctors) > 1:
+        doctor_options = format_doctor_options(matching_doctors)
+        return (
+            "Several doctors share this name. Please resubmit your request using "
+            f"the doctor's ID instead:\n{doctor_options}"
+        )
+ 
+    doctor = matching_doctors[0]
+ 
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+ 
+    cursor.execute(
+        """SELECT id, google_event_id FROM appointments
+           WHERE client_id = %s AND doctor_id = %s AND status = 'confirmed'""",
+        (client["id"], doctor["id"])
+    )
+    existing_appointment = cursor.fetchone()
+ 
+    if existing_appointment is None:
+        cursor.close()
+        connection.close()
+        return f"We couldn't find an existing appointment with Dr. {doctor['full_name']} to cancel."
+ 
+    service = get_service()
+    delete_calendar_event(service, existing_appointment["google_event_id"])
+ 
+    cursor.execute(
+        "UPDATE appointments SET status = 'cancelled' WHERE id = %s",
+        (existing_appointment["id"],)
+    )
+    connection.commit()
+ 
+    cursor.close()
+    connection.close()
+ 
+    return f"Your appointment with Dr. {doctor['full_name']} has been cancelled."
+
+
+@mcp.tool(name="list_appointments")
+def list_appointments(identifier: str) -> str:
+    """
+    Lists all of a client's upcoming confirmed appointments.
+
+    identifier: the client's telegram_id or whatsapp_number
+    """
+    client = get_client_by_identifier(identifier)
+
+    if client is None:
+        return "We couldn't find your client record yet. Please send a message first so we can register you."
+
+    connection = get_connection()
+    cursor = connection.cursor(dictionary=True)
+
+    cursor.execute(
+        """SELECT a.start_time, d.full_name, d.specialization
+        FROM appointments a
+        JOIN doctors d ON a.doctor_id = d.id
+        WHERE a.client_id = %s AND a.status = 'confirmed' AND a.start_time >= NOW()
+        ORDER BY a.start_time""",
+        (client["id"],)
+    )
+    appointments = cursor.fetchall()
+
+    cursor.close()
+    connection.close()
+
+    if not appointments:
+        return "You have no upcoming appointments."
+
+    lines = [
+        f"- {appt['start_time'].strftime('%Y-%m-%d %H:%M')} with Dr. {appt['full_name']} ({appt['specialization']})"
+        for appt in appointments
+    ]
+
+    return "Your upcoming appointments:\n" + "\n".join(lines)
+ 
 
     
 
