@@ -44,7 +44,7 @@ def search_doctors_by_symptoms(symptom_description: str) -> str:
 
     placeholders = ", ".join(["%s"] * len(matching_ids))
     cursor.execute(
-        f"SELECT full_name, specialization, years_experience, description FROM doctors WHERE id IN ({placeholders})",
+        f"SELECT id, full_name, specialization, years_experience, description FROM doctors WHERE id IN ({placeholders})",
         tuple(matching_ids)
     )
     matched_doctors = cursor.fetchall()
@@ -53,7 +53,6 @@ def search_doctors_by_symptoms(symptom_description: str) -> str:
     connection.close()
 
     return format_doctors(matched_doctors)
-
 
 
 @mcp.tool(name="book_appointment")
@@ -107,12 +106,31 @@ def book_appointment(identifier: str, doctor_identifier: str, date: str = None, 
 
     doctor = matching_doctors[0]
 
+    connection = get_connection()
+    cursor = connection.cursor()
+    cursor.execute(
+        """SELECT id FROM appointments
+           WHERE client_id = %s AND doctor_id = %s AND status = 'confirmed'""",
+        (client["id"], doctor["id"])
+    )
+    already_booked = cursor.fetchone() is not None
+    cursor.close()
+    connection.close()
+
+    if already_booked:
+        return (
+            f"You already have an appointment with Dr. {doctor['full_name']}. "
+            "You can only have one appointment per doctor at a time — "
+            "please reschedule or cancel the existing one first."
+        )
+
     if has_conflicting_appointment(doctor["id"], date, time):
         return (
             f"Dr. {doctor['full_name']} already has an appointment at {time} on {date}. "
             "Please choose a different time."
         )
-    # create Calendar event, insert appointment into MySQL
+
+    #     create Calendar event, insert appointment into MySQL
     client_email = client["email"]
     service = get_service()
 
@@ -133,7 +151,7 @@ def book_appointment(identifier: str, doctor_identifier: str, date: str = None, 
     cursor = connection.cursor()
     cursor.execute(
         """INSERT INTO appointments (client_id, doctor_id, start_time, end_time, status, google_event_id)
-            VALUES (%s, %s, %s, %s, 'confirmed', %s)""",
+        VALUES (%s, %s, %s, %s, 'confirmed', %s)""",
         (client["id"], doctor["id"], start_dt, end_dt, google_event_id)
     )
     connection.commit()
@@ -145,7 +163,6 @@ def book_appointment(identifier: str, doctor_identifier: str, date: str = None, 
         f"with Dr. {doctor['full_name']} ({doctor['specialization']}). "
         f"A calendar invite has been sent to {client_email}."
     )
-
 @mcp.tool(name="add_client_email")
 def add_client_email(identifier: str, client_email: str) -> str:
     """
@@ -188,7 +205,6 @@ def reschedule_appointment(identifier: str, doctor_identifier: str, date: str = 
     time: new appointment start time, format 'HH:MM'
     """
     client = get_client_by_identifier(identifier)
-
 
 
     if client is None or not client.get("email"):
