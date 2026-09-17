@@ -22,13 +22,19 @@ app = Flask(__name__)
 
 TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
-GROQ_MODEL = os.getenv("GROQ_MODEL") 
+GROQ_MODEL = os.getenv("GROQ_MODEL")
 
-history = []
+# One conversation history PER client, keyed by identifier — never a single shared list.
+conversation_histories: dict[str, list[dict]] = {}
+
 groq_client = AsyncGroq(api_key=GROQ_API_KEY)
 
 
-async def call_mcp_agent(identifier: str, message: str, history: list[dict] = None) -> str:
+def get_history(identifier: str) -> list[dict]:
+    return conversation_histories.setdefault(identifier, [])
+
+
+async def call_mcp_agent(identifier: str, message: str, history: list[dict]) -> str:
     params = StdioServerParameters(command="uv", args=["run", "mcp_server.py"])
 
     async with stdio_client(params) as (reader, writer):
@@ -48,7 +54,7 @@ async def call_mcp_agent(identifier: str, message: str, history: list[dict] = No
 
             print("Calling the Groq model to select the right tool...")
 
-            completion = groq_client.chat.completions.create(
+            completion = await groq_client.chat.completions.create(
                 model=GROQ_MODEL,
                 messages=[{"role": "system", "content": prompt_text}]
             )
@@ -75,12 +81,11 @@ async def call_mcp_agent(identifier: str, message: str, history: list[dict] = No
 
             try:
                 result = await session.call_tool(tool_name, arguments=args)
-                return result.content[0].text
+                reply_text = result.content[0].text
+                return reply_text
             except Exception as e:
                 print(f"Tool call failed: {e}")
                 return "Sorry, something went wrong while processing your request. Please try again."
-            
-
 
 
 @app.post("/webhook/telegram")
@@ -96,7 +101,12 @@ def telegram_webhook():
 
     create_client(telegram_id, channel="telegram", full_name=full_name)
 
-    reply_text = asyncio.run(call_mcp_agent(identifier=telegram_id, message=incoming_message))
+    history = get_history(telegram_id)
+    history.append({"role": "user", "content": incoming_message})
+
+    reply_text = asyncio.run(call_mcp_agent(identifier=telegram_id, message=incoming_message, history=history))
+
+    history.append({"role": "assistant", "content": reply_text})
 
     send_telegram_message(telegram_id, reply_text)
     return "OK", 200
@@ -110,7 +120,12 @@ def whatsapp_webhook():
 
     create_client(from_number, channel="whatsapp", full_name=full_name)
 
-    reply_text = asyncio.run(call_mcp_agent(identifier=from_number, message=incoming_message))
+    history = get_history(from_number)
+    history.append({"role": "user", "content": incoming_message})
+
+    reply_text = asyncio.run(call_mcp_agent(identifier=from_number, message=incoming_message, history=history))
+
+    history.append({"role": "assistant", "content": reply_text})
 
     resp = MessagingResponse()
     resp.message(reply_text)
