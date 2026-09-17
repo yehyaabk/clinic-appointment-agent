@@ -1,0 +1,51 @@
+Medical Center — General Information
+
+Name: Clinique Saint-Exupéry
+Address: 24 Rue des Lilas, 69003 Lyon, France
+Phone: +33 4 78 45 62 10
+Email: contact@clinique-saint-exupery.fr
+Website: www.clinique-saint-exupery.fr
+
+Opening Hours:
+Monday to Friday: 9:00 AM to 5:00 PM
+Saturday and Sunday: Closed
+Closed on public holidays.
+
+Appointment Policy:
+- All appointments last 30 minutes.
+- Appointments can be booked up to 30 days in advance.
+- A valid email address is required before booking any appointment; a calendar
+  invitation is sent to this email once the appointment is confirmed.
+- A patient may have at most one confirmed appointment per doctor at a time.
+  To book another slot with the same doctor, the existing appointment must
+  first be rescheduled or cancelled.
+- Appointments can be rescheduled or cancelled directly through this chatbot,
+  free of charge, at any time before the appointment.
+- Patients are asked to arrive 10 minutes before their scheduled time to
+  complete any necessary paperwork.
+
+Available Specializations:
+- Dermatology
+- Cardiology
+- General Medicine
+- Pediatrics
+- Gynecology
+- Ophthalmology
+- Orthopedics
+
+Location & Access:
+- The clinic is located in the 3rd arrondissement of Lyon, a 5-minute walk
+  from the Part-Dieu train station.
+- Metro: Line B, "Part-Dieu" station.
+- Free patient parking is available on-site (entrance on Rue des Lilas).
+- The building is fully wheelchair accessible, with an elevator to all floors.
+
+Other Information:
+- Accepted insurance: Sécurité Sociale (French national health insurance),
+  Mutuelle top-up plans, and most major private insurers.
+- Payment methods: credit/debit card, cash, and contactless mobile payment.
+- Cancellations made less than 24 hours before the appointment may be
+  subject to a small administrative fee.
+- For medical emergencies, please call 15 (SAMU) or go directly to the
+  nearest emergency room — this chatbot is only for scheduling non-urgent
+  appointments.

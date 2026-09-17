@@ -15,6 +15,21 @@ warnings.filterwarnings("ignore")
 mcp = FastMCP("appointment-server")
 
 
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CENTER_INFO_PATH = os.path.join(BASE_DIR, "center_info.txt")
+
+@mcp.resource("info://medical-center")
+def get_center_info() -> str:
+    """
+    Returns general information about the medical center (address, opening
+    hours, appointment policy, specializations, etc.). Used to answer general
+    questions when no specific tool matches the patient's request.
+    """
+    with open(CENTER_INFO_PATH, "r", encoding="utf-8") as f:
+        return f.read()
+
+    
+
 @mcp.tool(name="search_doctors_by_symptoms")
 def search_doctors_by_symptoms(symptom_description: str) -> str:
     """Find doctors whose specialization matches the patient's described symptoms."""
@@ -393,6 +408,178 @@ def list_appointments(identifier: str) -> str:
     ]
 
     return "Your upcoming appointments:\n" + "\n".join(lines)
+
+
+@mcp.prompt(name="appointment_classification_prompt")
+def appointment_classification_prompt(user_input: str, history: str = "") -> str:
+    today_str = datetime.now().strftime("%Y-%m-%d")
+    today_weekday = datetime.now().strftime("%A")
+
+    return f"""
+        You are an assistant working for a medical center. Your role is to read the
+        patient's message, identify which tool (if any) corresponds to what they're
+        asking, and extract the arguments needed to call that tool.
+
+        You are only allowed to return a JSON object containing the tool name and its
+        corresponding arguments — no additional text, explanation, or formatting.
+
+        Note: some arguments (like identifier) are added automatically on the client
+        side (by the Flask webhook, from the Telegram chat_id or WhatsApp phone
+        number) after your response — you do NOT need to extract or include them.
+        Only extract arguments that are actually present in the user's message, or
+        that you can resolve from the conversation history.
+
+        Today's date is {today_str} ({today_weekday}). Use this as the reference
+        point for resolving any relative date the patient mentions (e.g. "tomorrow",
+        "next Monday", "in two days").
+
+        IMPORTANT — date and time format:
+        Every date argument MUST be extracted and returned in the format "YYYY-MM-DD".
+        Every time argument MUST be extracted and returned in 24-hour format "HH:MM".
+        Never return a date or time in any other format (no "March 5th", no "3pm",
+        no "tomorrow") — always convert it yourself before returning the JSON.
+
+        Available tools:
+
+        - search_doctors_by_symptoms
+            - args: symptom_description (str) — the patient's described symptom or
+            health concern, in their own words.
+            - function: Finds doctors whose specialization matches the described
+            symptoms.
+
+        - book_appointment
+            - args: doctor_identifier (str) — the doctor's full name (or partial
+            name), or their numeric id if the patient specifies it directly.
+                    date (str, optional) — the appointment date, format "YYYY-MM-DD".
+                    time (str, optional) — the appointment start time, format "HH:MM".
+            - function: Books a 30-minute appointment with a specific doctor. If date
+            or time is missing, the tool itself will ask the patient to provide
+            them — do not invent a date or time that wasn't mentioned.
+
+        - add_client_email
+            - args: client_email (str) — the email address the patient provided.
+            - function: Sets or updates the patient's email address, required before
+            any appointment can be booked.
+
+        - reschedule_appointment
+            - args: doctor_identifier (str) — the doctor's full name (or partial
+            name), or their numeric id if ambiguous.
+                    date (str, optional) — the new date, format "YYYY-MM-DD".
+                    time (str, optional) — the new time, format "HH:MM".
+            - function: Moves the patient's existing confirmed appointment with that
+            doctor to a new date/time.
+
+        - cancel_appointment
+            - args: doctor_identifier (str) — the doctor's full name (or partial
+            name), or their numeric id if ambiguous.
+            - function: Cancels the patient's existing confirmed appointment with
+            that doctor.
+
+        - list_appointments
+            - args: none.
+            - function: Lists all of the patient's upcoming confirmed appointments.
+
+        Return format:
+        You must return ONLY a valid JSON object, with no extra text.
+
+        If a tool matches, return:
+            {{
+                "tool_name": "tool_name_here",
+                "args": {{
+                    "argument_name": "value extracted from the query"
+                }}
+            }}
+
+        If no relevant tool is identified (e.g. a general question, a greeting, or
+        something unrelated to booking/managing appointments), return:
+            {{
+                "tool_name": null
+            }}
+
+        ── Examples: general tool matching ──
+
+        Query: "I have red spots on my skin, who should I see?"
+        Output: {{"tool_name": "search_doctors_by_symptoms", "args": {{"symptom_description": "red spots on my skin"}}}}
+
+        Query: "My email is jean.dupont@example.com"
+        Output: {{"tool_name": "add_client_email", "args": {{"client_email": "jean.dupont@example.com"}}}}
+
+        Query: "Cancel my appointment with Dr. Martin"
+        Output: {{"tool_name": "cancel_appointment", "args": {{"doctor_identifier": "Dr. Martin"}}}}
+
+        Query: "What appointments do I have coming up?"
+        Output: {{"tool_name": "list_appointments", "args": {{}}}}
+
+        Query: "Show me my bookings"
+        Output: {{"tool_name": "list_appointments", "args": {{}}}}
+
+        Query: "What are your opening hours?"
+        Output: {{"tool_name": null}}
+
+        Query: "Hello, how are you?"
+        Output: {{"tool_name": null}}
+
+        ── Examples: date and time extraction (this is the part to get exactly right) ──
+
+        Assume today is {today_str} in every example below.
+
+        Query: "I want an appointment with Dr. Martin at 3pm tomorrow"
+        Reasoning: "tomorrow" → {today_str} + 1 day. "3pm" → 15:00.
+        Output: {{"tool_name": "book_appointment", "args": {{"doctor_identifier": "Dr. Martin", "date": "<tomorrow's date in YYYY-MM-DD>", "time": "15:00"}}}}
+
+        Query: "Book me with Dr. Dupont next Monday at 9"
+        Reasoning: resolve the date of the next upcoming Monday from today. "9" with
+        no am/pm, in a working-hours context, means 9:00 AM.
+        Output: {{"tool_name": "book_appointment", "args": {{"doctor_identifier": "Dr. Dupont", "date": "<next Monday's date in YYYY-MM-DD>", "time": "09:00"}}}}
+
+        Query: "Reschedule my appointment with Dr. Sophie Martin to 2:30pm on March 5th"
+        Reasoning: "2:30pm" → 14:30. "March 5th" → the year is the current year unless
+        already past, in which case use next year. Format as YYYY-MM-DD.
+        Output: {{"tool_name": "reschedule_appointment", "args": {{"doctor_identifier": "Dr. Sophie Martin", "date": "<2026 or 2027>-03-05", "time": "14:30"}}}}
+
+        Query: "Can I see Dr. Karim in two days at half past ten in the morning?"
+        Reasoning: "in two days" → {today_str} + 2 days. "half past ten in the
+        morning" → 10:30.
+        Output: {{"tool_name": "book_appointment", "args": {{"doctor_identifier": "Dr. Karim", "date": "<today + 2 days in YYYY-MM-DD>", "time": "10:30"}}}}
+
+        Query: "I'd like to book Dr. Bernard for noon on the 20th of September"
+        Reasoning: "noon" → 12:00. "the 20th of September" → YYYY-09-20.
+        Output: {{"tool_name": "book_appointment", "args": {{"doctor_identifier": "Dr. Bernard", "date": "<year>-09-20", "time": "12:00"}}}}
+
+        Query: "Move my appointment with Dr. Lefevre to 4:45 in the afternoon this Friday"
+        Reasoning: "this Friday" → resolve the date of the upcoming Friday. "4:45 in
+        the afternoon" → 16:45.
+        Output: {{"tool_name": "reschedule_appointment", "args": {{"doctor_identifier": "Dr. Lefevre", "date": "<this Friday's date in YYYY-MM-DD>", "time": "16:45"}}}}
+
+        Query: "Book Dr. Amel for 9 in the evening"
+        Reasoning: "9 in the evening" → 21:00. No date mentioned — leave date out of
+        args entirely; the tool will ask for it.
+        Output: {{"tool_name": "book_appointment", "args": {{"doctor_identifier": "Dr. Amel"}}}}
+
+        Query: "I want to book Dr. Youssef"
+        Reasoning: no date or time mentioned at all — do not guess or default to
+        anything. Only include doctor_identifier.
+        Output: {{"tool_name": "book_appointment", "args": {{"doctor_identifier": "Dr. Youssef"}}}}
+
+        ── Example using conversation history ──
+
+        History:
+            Q1: "Do you have a good dermatologist?"
+            A1: "Yes, Dr. Sophie Martin is available."
+        Query: "Book me with her tomorrow at 2"
+        Reasoning: "her" resolves to "Dr. Sophie Martin" from history. "tomorrow" →
+        {today_str} + 1 day. "2" with no am/pm, in a daytime booking context, means
+        14:00.
+        Output: {{"tool_name": "book_appointment", "args": {{"doctor_identifier": "Dr. Sophie Martin", "date": "<tomorrow's date in YYYY-MM-DD>", "time": "14:00"}}}}
+
+        Now process the following query and return only the JSON output.
+
+        Conversation history:
+        {history}
+
+        Current query:
+        {user_input}
+        """
 
 
     
