@@ -11,9 +11,14 @@ from mcp import ClientSession, StdioServerParameters
 from mcp.client.stdio import stdio_client
 from twilio.twiml.messaging_response import MessagingResponse
 from groq import AsyncGroq
+from pyngrok import ngrok
+from threading import Thread
 
 from helpers.clients import create_client
 from helpers.mcp_agent_tools import format_history
+from db.init_db import create_database_if_not_exists, run_schema
+from calendar_service.calendar_tools import get_service
+from db.seed import seed_doctors
 
 warnings.filterwarnings("ignore")
 load_dotenv()
@@ -146,7 +151,24 @@ def send_telegram_message(chat_id, text):
     response = requests.post(url, json={"chat_id": chat_id, "text": text})
     print(response.text)
 
+def run_flask():
+    app.run(host="0.0.0.0", port=5000)
 
 if __name__ == "__main__":
-    # TODO
+    create_database_if_not_exists()
+    run_schema()
+    seed_doctors()
+    get_service() # to run the OAuth login constent screen
+
+    flask_thread = Thread(target=run_flask)
+    flask_thread.start()
+
+    public_url = ngrok.connect(5000).public_url
+    print(f"Tunnel running at: {public_url}")
+
+    response = requests.post(
+            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook",
+                json={"url": f"{public_url}/webhook/telegram"}
+        )
+    flask_thread.join()
     pass
