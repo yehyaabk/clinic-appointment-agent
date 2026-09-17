@@ -29,7 +29,7 @@ TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY")
 GROQ_MODEL = os.getenv("GROQ_MODEL")
 
-# One conversation history PER client, keyed by identifier — never a single shared list.
+
 conversation_histories: dict[str, list[dict]] = {}
 
 groq_client = AsyncGroq(api_key=GROQ_API_KEY)
@@ -78,17 +78,22 @@ async def call_mcp_agent(identifier: str, message: str, history: list[dict]) -> 
             tool_name = parsed.get("tool_name")
 
             if not tool_name:
-                resource_result = await session.read_resource("info://medical-center")
-                center_info = resource_result.contents[0].text
-                print("Waiting for the Groq model to answer the general question...")
-                completion = await groq_client.chat.completions.create(
-                    model=GROQ_MODEL,
-                    messages=[
-                        {"role": "system", "content": f"Answer the patient's question using only this information about the medical center:\n\n{center_info}"},
-                        {"role": "user", "content": message}
-                    ]
-                )
-                return completion.choices[0].message.content
+                try:
+                    resource_result = await session.read_resource("info://medical-center")
+                    center_info = resource_result.contents[0].text
+
+                    print("Waiting for the Groq model to answer the general question...")
+                    completion = await groq_client.chat.completions.create(
+                        model=GROQ_MODEL,
+                        messages=[
+                            {"role": "system", "content": f"Answer the patient's question using only this information about the medical center:\n\n{center_info}"},
+                            {"role": "user", "content": message}
+                        ]
+                    )
+                    return completion.choices[0].message.content
+                except Exception as e:
+                    print(f"General question handling failed: {e}")
+                    return "Sorry, I couldn't process that question right now. Please try again."
 
             args = parsed.get("args", {})
             args["identifier"] = identifier
@@ -151,14 +156,16 @@ def send_telegram_message(chat_id, text):
     response = requests.post(url, json={"chat_id": chat_id, "text": text})
     print(response.text)
 
+
 def run_flask():
-    app.run(host="0.0.0.0", port=5000)
+    app.run(host="0.0.0.0", port=5000, threaded=True)
+
 
 if __name__ == "__main__":
     create_database_if_not_exists()
     run_schema()
     seed_doctors()
-    get_service() # to run the OAuth login constent screen
+    get_service()  # to run the OAuth login consent screen
 
     flask_thread = Thread(target=run_flask)
     flask_thread.start()
@@ -167,8 +174,9 @@ if __name__ == "__main__":
     print(f"Tunnel running at: {public_url}")
 
     response = requests.post(
-            f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook",
-                json={"url": f"{public_url}/webhook/telegram"}
-        )
+        f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/setWebhook",
+        json={"url": f"{public_url}/webhook/telegram"}
+    )
+    print(response.json())
+
     flask_thread.join()
-    pass
