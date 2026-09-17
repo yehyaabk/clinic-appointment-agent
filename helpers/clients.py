@@ -20,34 +20,33 @@ def get_client_by_identifier(identifier: str) -> dict | None:
     return client
 
 
-def get_or_create_client(identifier: str, channel: str) -> int:
+def create_client(identifier: str, channel: str, full_name: str = None) -> None:
     """
-    Finds the client matching this identifier, or creates a new (email-less)
-    record if none exists yet. Returns the client's internal id.
-
+    Ensures a client row exists for this identifier, creating one if needed.
+    Safe to call on every incoming message — if the client already exists,
+    nothing changes.
+ 
     channel: 'telegram' or 'whatsapp' — determines which column the identifier is stored in.
+    full_name: the client's display name from Telegram/WhatsApp, if available.
     """
-    client = get_client_by_identifier(identifier)
-    if client is not None:
-        return client["id"]
-
     connection = get_connection()
     cursor = connection.cursor()
-
+ 
     if channel == "telegram":
         cursor.execute(
-            "INSERT INTO clients (telegram_id, channel) VALUES (%s, %s)",
-            (identifier, channel)
+            """INSERT INTO clients (telegram_id, channel, full_name)
+               VALUES (%s, %s, %s)
+               ON DUPLICATE KEY UPDATE id = id""",
+            (identifier, channel, full_name)
         )
     else:
         cursor.execute(
-            "INSERT INTO clients (whatsapp_number, channel) VALUES (%s, %s)",
-            (identifier, channel)
+            """INSERT INTO clients (whatsapp_number, channel, full_name)
+               VALUES (%s, %s, %s)
+               ON DUPLICATE KEY UPDATE id = id""",
+            (identifier, channel, full_name)
         )
-
     connection.commit()
-    new_id = cursor.lastrowid
-
+ 
     cursor.close()
     connection.close()
-    return new_id
