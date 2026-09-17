@@ -73,8 +73,17 @@ async def call_mcp_agent(identifier: str, message: str, history: list[dict]) -> 
             tool_name = parsed.get("tool_name")
 
             if not tool_name:
-                # TODO
-                pass
+                resource_result = await session.read_resource("info://medical-center")
+                center_info = resource_result.contents[0].text
+                print("Waiting for the Groq model to answer the general question...")
+                completion = await groq_client.chat.completions.create(
+                    model=GROQ_MODEL,
+                    messages=[
+                        {"role": "system", "content": f"Answer the patient's question using only this information about the medical center:\n\n{center_info}"},
+                        {"role": "user", "content": message}
+                    ]
+                )
+                return completion.choices[0].message.content
 
             args = parsed.get("args", {})
             args["identifier"] = identifier
