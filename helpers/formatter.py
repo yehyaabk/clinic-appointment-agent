@@ -15,3 +15,9 @@ def format_doctors(doctors: list[dict]) -> str:
         "along with your email address if you haven't registered it yet."
     )
  
+
+def markdown_to_whatsapp(text: str) -> str:
+    """Converts common Markdown syntax to WhatsApp's formatting syntax."""
+    text = re.sub(r"\*\*(.*?)\*\*", r"*\1*", text)   
+    text = re.sub(r"~~(.*?)~~", r"~\1~", text)         
+    return text

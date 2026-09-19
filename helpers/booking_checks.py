@@ -7,12 +7,6 @@ MAX_BOOKING_WINDOW_DAYS = 30
 
 
 def find_matching_doctors(doctor_identifier: str) -> list[dict]:
-    """
-    Looks up doctors matching the given identifier — either a doctor's id
-    (if doctor_identifier is numeric) or a partial match on their full name
-    (e.g. "Dupont" matches "Dr. Jean-Paul Dupont").
-    Returns a list of matching rows (could be empty, one, or several).
-    """
     connection = get_connection()
     cursor = connection.cursor(dictionary=True)
 
@@ -21,13 +15,21 @@ def find_matching_doctors(doctor_identifier: str) -> list[dict]:
             "SELECT id, full_name, specialization FROM doctors WHERE id = %s",
             (int(doctor_identifier),)
         )
+        matches = cursor.fetchall()
     else:
-        cursor.execute(
-            "SELECT id, full_name, specialization FROM doctors WHERE full_name LIKE %s",
-            (f"%{doctor_identifier.strip()}%",)
-        )
+        words = [w for w in doctor_identifier.strip().split() if w.lower() not in ("dr", "dr.")]
 
-    matches = cursor.fetchall()
+        if not words:
+            matches = []
+        else:
+            conditions = " AND ".join(["full_name LIKE %s"] * len(words))
+            params = tuple(f"%{word}%" for word in words)
+            cursor.execute(
+                f"SELECT id, full_name, specialization FROM doctors WHERE {conditions}",
+                params
+            )
+            matches = cursor.fetchall()
+
     cursor.close()
     connection.close()
     return matches

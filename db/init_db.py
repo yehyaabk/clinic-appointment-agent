@@ -1,5 +1,5 @@
 import os
-from config import get_connection, DB_NAME
+from db.config import get_connection, DB_NAME
 
 SCHEMA_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "schema.sql")
 

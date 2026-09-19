@@ -15,6 +15,7 @@ from pyngrok import ngrok
 from threading import Thread
 
 from helpers.clients import create_client
+from helpers.formatter import markdown_to_whatsapp
 from helpers.mcp_agent_tools import format_history
 from db.init_db import create_database_if_not_exists, run_schema
 from calendar_service.calendar_tools import get_service
@@ -86,7 +87,13 @@ async def call_mcp_agent(identifier: str, message: str, history: list[dict]) -> 
                     completion = await groq_client.chat.completions.create(
                         model=GROQ_MODEL,
                         messages=[
-                            {"role": "system", "content": f"Answer the patient's question using only this information about the medical center:\n\n{center_info}"},
+                            {
+                                "role": "system",
+                                "content": (
+                                    f"Answer the patient's question using this information about the medical center:\n\n{center_info}\n\n"
+                                    f"Here is the recent conversation history, for context:\n{format_history(history)}"
+                                )
+                            },
                             {"role": "user", "content": message}
                         ]
                     )
@@ -143,6 +150,7 @@ def whatsapp_webhook():
     history.append({"role": "user", "content": incoming_message})
 
     reply_text = asyncio.run(call_mcp_agent(identifier=from_number, message=incoming_message, history=history))
+    reply_text = markdown_to_whatsapp(reply_text)
 
     history.append({"role": "assistant", "content": reply_text})
 
@@ -153,8 +161,9 @@ def whatsapp_webhook():
 
 def send_telegram_message(chat_id, text):
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
-    response = requests.post(url, json={"chat_id": chat_id, "text": text})
-    print(response.text)
+    response = requests.post(url, json={"chat_id": chat_id, "text": text, "parse_mode": "Markdown"})
+    # print(response.text)
+
 
 
 def run_flask():
