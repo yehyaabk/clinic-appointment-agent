@@ -78,12 +78,10 @@ language.
  
 ### WhatsApp / Twilio (French conversation)
  
-| | |
-|---|---|
-| ![WhatsApp screenshot 1](images/twilio/image_1.png) | ![WhatsApp screenshot 2](images/twilio/image_2.png) |
-| ![WhatsApp screenshot 3](images/twilio/image_3.png) | ![WhatsApp screenshot 4](images/twilio/image_4.png)
-
-
+![WhatsApp screenshot 1](images/twilio/image_1.png)
+![WhatsApp screenshot 2](images/twilio/image_2.png)
+![WhatsApp screenshot 3](images/twilio/image_3.png)
+![WhatsApp screenshot 4](images/twilio/image_4.png)
 
 ## How to Run the Project
  
