@@ -15,6 +15,7 @@ from pyngrok import ngrok
 from threading import Thread
 
 from helpers.clients import create_client
+from helpers.groq_functions import reformulate_reply 
 from helpers.formatter import markdown_to_whatsapp
 from helpers.mcp_agent_tools import format_history
 from db.init_db import create_database_if_not_exists, run_schema
@@ -108,7 +109,17 @@ async def call_mcp_agent(identifier: str, message: str, history: list[dict]) -> 
             try:
                 result = await session.call_tool(tool_name, arguments=args)
                 reply_text = result.content[0].text
-                return reply_text
+
+                reformulated = await reformulate_reply(
+                groq_client=groq_client,
+                model=GROQ_MODEL,
+                reply_text=reply_text,
+                history=history
+                
+                )
+
+                return reformulated
+
             except Exception as e:
                 print(f"Tool call failed: {e}")
                 return "Sorry, something went wrong while processing your request. Please try again."

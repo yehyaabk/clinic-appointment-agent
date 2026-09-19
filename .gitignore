@@ -15,6 +15,10 @@ wheels/
 calendar_service/credentials.json
 calendar_service/token.json
 
+# images
+images
+
+
 
 
 

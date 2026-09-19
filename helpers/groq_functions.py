@@ -64,3 +64,45 @@ def match_doctors_to_symptoms(symptom_description: str, doctors: list[str]) -> l
             matching_indices.append(index)
 
     return matching_indices
+
+async def reformulate_reply(groq_client, model: str, reply_text: str, history: list[dict]) -> str:
+    """
+    Takes the raw reply produced by an MCP tool (always in English, often
+    template-like) and returns a more natural, conversational version —
+    automatically translated into whichever language the patient has been
+    using, based on the conversation history.
+
+    groq_client: an already-initialized AsyncGroq client, passed in from the caller.
+    model: the Groq model name to use.
+
+    If reformulation fails for any reason, the original reply_text is
+    returned unchanged, so a client always gets a response.
+    """
+    history_text = "\n".join(f"- {turn['role']}: {turn['content']}" for turn in history[-6:])
+
+    system_prompt = (
+        "You rewrite messages from a medical appointment chatbot so they sound "
+        "natural and conversational, while keeping the exact same meaning and "
+        "all factual details (names, dates, times, IDs) unchanged.\n\n"
+        "First, determine which language the patient has been using, based on "
+        "the conversation history below. If the message you're given is not "
+        "already in that language, translate it. If no history is available, "
+        "keep the message in its original language.\n\n"
+        "Return ONLY the reformulated message — no explanation, no quotes, no "
+        "extra text.\n\n"
+        f"Conversation history:\n{history_text if history_text else '(none yet)'}"
+    )
+
+    try:
+        completion = await groq_client.chat.completions.create(
+            model=model,
+            temperature=0.3,
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {"role": "user", "content": reply_text}
+            ]
+        )
+        return completion.choices[0].message.content.strip()
+    except Exception as e:
+        print(f"Reformulation failed, sending original reply: {e}")
+        return reply_text
